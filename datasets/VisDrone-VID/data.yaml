@@ -1,6 +1,6 @@
-train: ./train/sequences
-val: ./val/sequences
-test: ./test/sequences
+train: ./train/images
+val: ./val/images
+test: ./test/images
 
 nc: 1
 names: [

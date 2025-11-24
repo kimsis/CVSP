@@ -21,10 +21,7 @@ CLASS_MAP = {
 def convert_annotations(dataset: str, type: str, source_format: str):
 
     src_dir = os.path.join('datasets', dataset, type, "annotations")
-    if( source_format == "image"):
-        img_dir = os.path.join('datasets', dataset, type, "images")
-    else:
-        img_dir = os.path.join('datasets', dataset, type, "sequences")
+    img_dir = os.path.join('datasets', dataset, type, "images")
     dist_dir = os.path.join('datasets', dataset, type, "labels")
 
     os.makedirs(dist_dir, exist_ok=True)
@@ -50,42 +47,103 @@ def convert_annotations(dataset: str, type: str, source_format: str):
 
         height_img, width_img = image.shape[:2]
 
-        yolo_annotation = []
+        base_name = os.path.splitext(file)[0]
+        label_dir = os.path.join(dist_dir, base_name)
+        os.makedirs(label_dir, exist_ok=True)
 
-        with open(annotation_path, "r") as f:
-            lineno = 0
-            for line in f:
-                try:
-                    cleaned = line.strip().rstrip(',')   # removes trailing comma(s)
-                    parts = cleaned.split(',')
-                    if len(parts) != 10:
-                        raise ValueError(f"Expected 8 fields, got {len(parts)}")
+        if source_format == "image":
+            process_file_image(annotation_path, dist_dir, file, width_img, height_img)
+        else:
+            process_file_video(annotation_path, label_dir, base_name, width_img, height_img)
 
-                    frame, target, x, y, w, h, score, category, truncated, occluded = map(int, cleaned.split(','))
+def parse_line(line, expected_fields):
+    """
+    Parse a comma-separated VisDrone line,
+    strip trailing commas, validate length, return list of ints.
+    """
+    cleaned = line.strip().rstrip(',')
+    parts = cleaned.split(',')
 
-                    if category not in CLASS_MAP:
-                        continue
+    if len(parts) != expected_fields:
+        raise ValueError(f"Expected {expected_fields} fields, got {len(parts)}")
 
-                    cls = CLASS_MAP[category]
+    return list(map(int, parts))
 
-                    # Convert to YOLO format
-                    x_center = (x + w / 2) / width_img
-                    y_center = (y + h / 2) / height_img
-                    w_norm = w / width_img
-                    h_norm = h / height_img
+def convert_box(x, y, w, h, width_img, height_img):
+    """
+    Convert VisDrone box to YOLO normalized format.
+    """
+    x_center = (x + w / 2) / width_img
+    y_center = (y + h / 2) / height_img
+    w_norm   = w / width_img
+    h_norm   = h / height_img
+    return x_center, y_center, w_norm, h_norm
 
-                    lineno += 1
-                    yolo_annotation.append(f"{cls} {x_center:.8f} {y_center:.8f} {w_norm:.8f} {h_norm:.8f}")
-                except Exception as e:
-                    print("\n❌ ERROR WHILE PROCESSING ANNOTATION\n")
-                    print(f"File:     {annotation_path}")
-                    print(f"Line No.: {lineno}")
-                    print(f"Line:     {repr(line)}")
-                    print(f"Error:    {e}")
-                    raise
+def process_file_image(annotation_path, dist_dir, out_filename, width_img, height_img):
+    """Process VisDrone image-level annotation files (8 fields)."""
 
-        with open(os.path.join(dist_dir, file), "w") as f:
-            f.write("\n".join(yolo_annotation))
+    yolo = []
+
+    with open(annotation_path, "r") as f:
+        for lineno, line in enumerate(f, start=1):
+            try:
+                x, y, w, h, score, category, truncated, occluded = parse_line(line, expected_fields=8)
+
+                if category not in CLASS_MAP:
+                    continue
+
+                cls = CLASS_MAP[category]
+                x_center, y_center, w_norm, h_norm = convert_box(x, y, w, h, width_img, height_img)
+
+                yolo.append(f"{cls} {x_center:.8f} {y_center:.8f} {w_norm:.8f} {h_norm:.8f}")
+
+            except Exception as e:
+                print("\n❌ ERROR WHILE PROCESSING ANNOTATION")
+                print(f"File:     {annotation_path}")
+                print(f"Line No.: {lineno}")
+                print(f"Line:     {repr(line)}")
+                print(f"Error:    {e}")
+                raise
+
+    # Write final file
+    out_path = os.path.join(dist_dir, out_filename)
+    with open(out_path, "w") as f:
+        f.write("\n".join(yolo))
+
+def process_file_video(annotation_path, dist_dir, base_name, width_img, height_img):
+    """Process VisDrone video annotation files (10 fields)."""
+
+    frame_annotations = {}
+
+    with open(annotation_path, "r") as f:
+        for lineno, line in enumerate(f, start=1):
+            try:
+                frame, target, x, y, w, h, score, category, truncated, occluded = \
+                    parse_line(line, expected_fields=10)
+
+                if category not in CLASS_MAP:
+                    continue
+
+                cls = CLASS_MAP[category]
+                x_center, y_center, w_norm, h_norm = convert_box(x, y, w, h, width_img, height_img)
+
+                yolo_line = f"{cls} {x_center:.8f} {y_center:.8f} {w_norm:.8f} {h_norm:.8f}"
+                frame_annotations.setdefault(frame, []).append(yolo_line)
+
+            except Exception as e:
+                print("\n❌ ERROR WHILE PROCESSING ANNOTATION")
+                print(f"File:     {annotation_path}")
+                print(f"Line No.: {lineno}")
+                print(f"Line:     {repr(line)}")
+                print(f"Error:    {e}")
+                raise
+
+    # Write one label file per frame
+    for frame_num, labels in frame_annotations.items():
+        out_name = f"{frame_num:07d}.txt"
+        out_path = os.path.join(dist_dir, out_name)
+        with open(out_path, "w") as f:
+            f.write("\n".join(labels))
 
 if __name__== "__main__":
         parser = argparse.ArgumentParser()

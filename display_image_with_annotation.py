@@ -6,18 +6,23 @@ import cv2
 import matplotlib.pyplot as plt
 from numpy import ndarray
 
-def parse_annotations(path: Path) -> List[Tuple[int, int, int, int]]:
+def parse_annotations(path: Path, format: str) -> List[Tuple[int, int, int, int]]:
     bboxes = []
     with open(path, "r") as f:
         lineno = 0
         for line in f:
             cleaned = line.strip().rstrip(',')   # removes trailing comma(s)
             parts = cleaned.split(',')
-            if len(parts) != 8:
-                raise ValueError(f"Expected 8 fields, got {len(parts)}")
+            if (format == "image"):
+                if len(parts) != 8:
+                    raise ValueError(f"Expected 8 fields, got {len(parts)}")
+                x, y, w, h, score, category, truncated, occluded = map(int, cleaned.split(','))
+            else:
+                if len(parts) != 10:
+                    raise ValueError(f"Expected 9 fields, got {len(parts)}")
+                frame, target, x, y, w, h, score, category, truncated, occluded = map(int, cleaned.split(','))
 
-            x, y, w, h, score, category, truncated, occluded = map(int, cleaned.split(','))
-            if category not in [1, 2]:  # Only consider pedestrian and people
+            if category not in [1, 2] or frame not in [1]:  # Only consider pedestrian and people in frame 1
                 continue
             bboxes.append(calculate_bbox(x, y, w, h))
     
@@ -78,6 +83,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--dataset", type=str, required=True, help="Path to dataset root (e.g. /path/to/dataset)")
     p.add_argument("--image", type=str, required=True, help="Image name")
+    p.add_argument("--format", type=str, default="image", choices=["image", "video"], help="Source format: image or video")
     args = p.parse_args()
 
 
@@ -85,12 +91,13 @@ def main():
 
     # handle image name whether or not it includes an extension
     image_name = Path(args.image)
-    if image_name.suffix:
+    if format == "image":
         image_path = dataset_root / "images" / image_name.name
     else:
-        image_path = dataset_root / "images" / (image_name.name + ".jpg")
+        image_path = dataset_root / "images" / image_name / "0000001.jpg"
 
-    ann_path = dataset_root / "labels" / (image_name.stem + ".txt")
+    # ann_path = dataset_root / "labels" / (image_name.stem + ".txt")
+    ann_path = dataset_root / "annotations" / (image_name.stem + ".txt")
 
     # Read image using OpenCV (returns BGR format)
     img = cv2.imread(str(image_path))
@@ -98,7 +105,8 @@ def main():
         raise ValueError(f"Could not read image: {image_path}")
     width_img, height_img = img.shape[1], img.shape[0]
 
-    bboxes = parse_labels(ann_path, width_img, height_img)
+    # bboxes = parse_labels(ann_path, width_img, height_img)
+    bboxes = parse_annotations(ann_path, args.format)
 
     img_with_box = draw_bbox_on_image(img, bboxes)
 
