@@ -18,10 +18,13 @@ CLASS_MAP = {
     2: 0, 
 }
 
-def convert_annotations(dataset: str, type: str):
+def convert_annotations(dataset: str, type: str, source_format: str):
 
     src_dir = os.path.join('datasets', dataset, type, "annotations")
-    img_dir = os.path.join('datasets', dataset, type, "images")
+    if( source_format == "image"):
+        img_dir = os.path.join('datasets', dataset, type, "images")
+    else:
+        img_dir = os.path.join('datasets', dataset, type, "sequences")
     dist_dir = os.path.join('datasets', dataset, type, "labels")
 
     os.makedirs(dist_dir, exist_ok=True)
@@ -35,7 +38,10 @@ def convert_annotations(dataset: str, type: str):
             continue
         
         annotation_path = os.path.join(src_dir, file)
-        image_path = os.path.join(img_dir, file.replace(".txt", ".jpg"))
+        if source_format == "image":
+            image_path = os.path.join(img_dir, file.replace(".txt", ".jpg"))
+        else:
+            image_path = os.path.join(img_dir, file.replace(".txt", "/0000001.jpg"))
 
         image = cv2.imread(image_path)
         if image is None:
@@ -52,10 +58,10 @@ def convert_annotations(dataset: str, type: str):
                 try:
                     cleaned = line.strip().rstrip(',')   # removes trailing comma(s)
                     parts = cleaned.split(',')
-                    if len(parts) != 8:
+                    if len(parts) != 10:
                         raise ValueError(f"Expected 8 fields, got {len(parts)}")
 
-                    x, y, w, h, score, category, truncated, occluded = map(int, cleaned.split(','))
+                    frame, target, x, y, w, h, score, category, truncated, occluded = map(int, cleaned.split(','))
 
                     if category not in CLASS_MAP:
                         continue
@@ -88,8 +94,8 @@ if __name__== "__main__":
              "--type",
              type=str,
              required=True,
-             choices=["train", "test", "valid"],
-             help="Dataset split (train/test/valid)"
+             choices=["train", "test", "val"],
+             help="Dataset split (train/test/val)"
         )
 
         parser.add_argument(
@@ -99,6 +105,15 @@ if __name__== "__main__":
              help="Name of the dataset to be used, e.g. VisDrone-DET"
         )
 
+        parser.add_argument(
+            "--source-format",
+            type=str,
+            required=False,
+            choices=["image", "video"],
+            default="image",
+            help="Format of the source data (image/video)",
+        )
+
         args = parser.parse_args()
 
-        convert_annotations(args.dataset, args.type)
+        convert_annotations(args.dataset, args.type, args.source_format)
