@@ -1,0 +1,17 @@
+train: ./train/images
+val: ./val/images
+test: ./test/images
+
+nc: 1
+names: [
+  'person'
+  # 'person'
+  # 'bicycle',
+  # 'car',
+  # 'van',
+  # 'truck',
+  # 'tricycle',
+  # 'awning-tricycle',
+  # 'bus',
+  # 'motor'
+]
