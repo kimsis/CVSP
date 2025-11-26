@@ -78,7 +78,6 @@ def draw_bbox_on_image(img: ndarray[any, any], bboxes: List[Tuple[int, int, int,
     
     return img
 
-
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--dataset", type=str, required=True, help="Path to dataset root (e.g. /path/to/dataset)")
@@ -103,8 +102,8 @@ def main():
     img = cv2.imread(str(image_path))
     if img is None:
         raise ValueError(f"Could not read image: {image_path}")
-    width_img, height_img = img.shape[1], img.shape[0]
-
+    
+    # width_img, height_img = img.shape[1], img.shape[0]
     # bboxes = parse_labels(ann_path, width_img, height_img)
     bboxes = parse_annotations(ann_path, args.format)
 
