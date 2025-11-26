@@ -98,6 +98,32 @@ def draw_label(frame, label, position, color, font_scale=0.6, thickness=2,
         thickness
     )
 
+def resize_for_display(frame, max_width=1920, max_height=1080):
+    """
+    Resize frame to fit within max dimensions while maintaining aspect ratio.
+    
+    Args:
+        frame: Input frame
+        max_width: Maximum width for display
+        max_height: Maximum height for display
+    
+    Returns:
+        Resized frame
+    """
+    height, width = frame.shape[:2]
+    
+    # If frame is already smaller, return as-is
+    if width <= max_width and height <= max_height:
+        return frame
+    
+    # Calculate scaling factor to fit within max dimensions
+    scale = min(max_width / width, max_height / height)
+    
+    new_width = int(width * scale)
+    new_height = int(height * scale)
+    
+    return cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_AREA)
+
 def get_video_sources(args):
     """
     Get list of video sources based on arguments.
@@ -180,7 +206,7 @@ def main(args: argparse.Namespace):
                     boxes = result.boxes.xyxy.cpu().numpy()
                     track_ids = result.boxes.id.cpu().numpy().astype(int)
                     confidence = result.boxes.conf.cpu().numpy()
-                    
+
                     # Draw bboxes and labels
                     active_ids = []
                     for box, track_id, conf in zip(boxes, track_ids, confidence):
@@ -200,7 +226,10 @@ def main(args: argparse.Namespace):
 
                     static_filter.cleanup_old_tracks(active_ids)
 
-            cv2.imshow(f'Person Tracking - {video_name}', frame)
+            # Resize frame for display if needed
+            display_frame = resize_for_display(frame, max_width=1920, max_height=1080)
+            
+            cv2.imshow(f'Person Tracking - {video_name}', display_frame)
             if save_output:
                 out.write(frame)
             
