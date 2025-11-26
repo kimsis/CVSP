@@ -90,7 +90,7 @@ def main():
 
     # handle image name whether or not it includes an extension
     image_name = Path(args.image)
-    if format == "image":
+    if args.format == "image":
         image_path = dataset_root / "images" / image_name.name
     else:
         image_path = dataset_root / "images" / image_name / "0000001.jpg"
@@ -112,6 +112,9 @@ def main():
     cv2.imshow(f"{image_path.name}", img_with_box)
     cv2.waitKey(0)  # Wait for key press
     cv2.destroyAllWindows()
+
+    output_path = f"output_{image_path.name}"
+    cv2.imwrite(output_path, img_with_box)
 
 
 if __name__ == "__main__":

@@ -81,17 +81,17 @@ def draw_label(frame, label, position, color, font_scale=0.6, thickness=2,
     # Draw background rectangle
     cv2.rectangle(
         frame,
-        (x, y - label_height - baseline - 5),
+        (x, y - label_height - baseline),
         (x + label_width, y),
         background,
-        -1
+        1
     )
     
     # Draw text
     cv2.putText(
         frame,
         label,
-        (x, y - baseline - 5),
+        (x, y - baseline),
         cv2.FONT_HERSHEY_SIMPLEX,
         font_scale,
         text_color,
