@@ -1,0 +1,20 @@
+# VisDrone2019 dataset configuration
+path: datasets/VisDrone-DET       # dataset root dir
+train: train/images        # train images
+val: val/images            # val images
+test: test/images          # test image
+
+# Classes
+nc: 1  # number of classes
+names: [
+  'pedestrian'
+  # 'people',
+  # 'bicycle',
+  # 'car',
+  # 'van',
+  # 'truck',
+  # 'tricycle',
+  # 'awning-tricycle',
+  # 'bus',
+  # 'motor'
+  ]

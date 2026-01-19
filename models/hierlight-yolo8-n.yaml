@@ -1,0 +1,65 @@
+# HierLight-YOLO-N Configuration
+
+# Number of classes (VisDrone has 10 classes)
+nc: 1
+
+# Anchors (not used in YOLOv8, but kept for compatibility)
+anchors: 3
+
+# Backbone
+backbone:
+  # [from, repeats, module, args]
+  - [-1, 1, Conv, [64, 3, 2]]           # 0-P1/2
+
+  - [-1, 1, Conv, [128, 3, 2]]          # 1-P2/4
+  - [-1, 1, IRDCB, [128, 2]]            # 2 (c2=128, n=2)
+
+  - [-1, 1, LDown, [256, 3, 2]]         # 3-P3/8 (c2=256, k=3, s=2)
+  - [-1, 1, IRDCB, [256, 2]]            # 4 (c2=256, n=2)
+
+  - [-1, 1, LDown, [512, 3, 2]]         # 5-P4/16 (c2=512, k=3, s=2)
+  - [-1, 1, IRDCB, [512, 2]]            # 6 (c2=512, n=2)
+
+  - [-1, 1, LDown, [1024, 3, 2]]        # 7-P5/32 (c2=1024, k=3, s=2)
+  - [-1, 1, IRDCB, [1024, 2]]           # 8 (c2=1024, n=2)
+  - [-1, 1, SPPF, [1024, 5]]            # 9
+
+# Head with HEPAN
+head:
+  # Channel compression
+  - [-1, 1, Conv, [512, 1, 1]]          # 10 - P5 compressed
+
+  - [6, 1, Conv, [256, 1, 1]]           # 11 - P4 compressed
+
+  - [4, 1, Conv, [128, 1, 1]]           # 12 - P3 compressed
+
+  - [2, 1, Conv, [64, 1, 1]]            # 13 - P2 compressed
+  
+  # Top-down pathway
+  - [10, 1, nn.Upsample, [None, 2, 'nearest']]  # 14
+  - [[-1, 11], 1, Concat, [1]]                  # 15
+  - [-1, 1, IRDCB, [256, 2]]                    # 16 - N4
+  
+  - [16, 1, nn.Upsample, [None, 2, 'nearest']]  # 17
+  - [[-1, 12], 1, Concat, [1]]                  # 18
+  - [-1, 1, IRDCB, [128, 2]]                    # 19 - N3
+  
+  - [19, 1, nn.Upsample, [None, 2, 'nearest']]  # 20
+  - [[-1, 13], 1, Concat, [1]]                  # 21
+  - [-1, 1, IRDCB, [64, 2]]                     # 22 - N2
+  
+  # Bottom-up pathway
+  - [22, 1, LDown, [128, 3, 2]]                 # 23
+  - [[-1, 19], 1, Concat, [1]]                  # 24
+  - [-1, 1, IRDCB, [128, 2]]                    # 25 - P3 out
+  
+  - [25, 1, LDown, [256, 3, 2]]                 # 26
+  - [[-1, 16], 1, Concat, [1]]                  # 27
+  - [-1, 1, IRDCB, [256, 2]]                    # 28 - P4 out
+  
+  - [28, 1, LDown, [512, 3, 2]]                 # 29
+  - [[-1, 10], 1, Concat, [1]]                  # 30
+  - [-1, 1, IRDCB, [512, 2]]                    # 31 - P5 out
+  
+  # Detection heads (P2, P3, P4, P5)
+  - [[22, 25, 28, 31], 1, Detect, [nc]]         # Detect
