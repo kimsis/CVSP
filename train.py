@@ -1,8 +1,9 @@
 import sys
+import argparse
 sys.path.insert(0, "./models")
 
 # Import your custom layers
-from hierlight_modules import IRDCB, LDown, HEPAN, P2DetectionHead
+from hierlight_modules import IRDCB, LDown
 
 # Register them into Ultralytics namespace (both locations)
 import ultralytics.nn.modules as modules
@@ -11,14 +12,10 @@ import ultralytics.nn.tasks as tasks
 # Add to modules
 modules.IRDCB = IRDCB
 modules.LDown = LDown
-modules.HEPAN = HEPAN
-modules.P2DetectionHead = P2DetectionHead
 
 # Add to tasks globals (where parse_model looks)
 tasks.IRDCB = IRDCB
 tasks.LDown = LDown
-tasks.HEPAN = HEPAN
-tasks.P2DetectionHead = P2DetectionHead
 
 # Patch parse_model to include custom modules in base_modules and repeat_modules
 _original_parse_model = tasks.parse_model
@@ -49,7 +46,10 @@ def patched_parse_model(d, ch, verbose=True):
         if not scale:
             scale = next(iter(scales.keys()))
             LOGGER.warning(f"no model scale passed. Assuming scale='{scale}'.")
-        depth, width, max_channels = scales[scale]
+        scale_config = scales[scale]
+        depth = scale_config.get("depth_multiple", depth)
+        width = scale_config.get("width_multiple", width)
+        max_channels = scale_config.get("max_channels", max_channels)
 
     if act:
         Conv.default_act = eval(act)
@@ -176,15 +176,52 @@ print(f"CUDA available: {torch.cuda.is_available()}")
 if torch.cuda.is_available():
     print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-# Load model
-model = YOLO('models/hierlight-yolo8-n.yaml')
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description='Train HierLight-YOLO')
+parser.add_argument('--scale', type=str, default='n', choices=['n', 's', 'm'], help='Model scale (n/s/m)')
+parser.add_argument('--resume', type=str, default=None, help='Path to checkpoint .pt to resume from')
+args = parser.parse_args()
+
+# Scale configurations
+scale_configs = {
+    'n': {'depth_multiple': 1.00, 'width_multiple': 0.33},
+    's': {'depth_multiple': 1.00, 'width_multiple': 0.67},
+    'm': {'depth_multiple': 1.00, 'width_multiple': 1.00}
+}
+
+# Load model with scale by modifying YAML config
+import yaml
+import tempfile
+import os
+if args.resume:
+    # Load from checkpoint and resume
+    model = YOLO(args.resume)
+    # When resuming, most settings are taken from the checkpoint; pass resume=True below
+else:
+    # Build model from custom YAML with selected scale
+    model_path = 'models/hierlight-yolo8.yaml'
+    with open(model_path, 'r') as f:
+        cfg = yaml.safe_load(f)
+
+    # Override the depth and width multipliers directly
+    cfg['depth_multiple'] = scale_configs[args.scale]['depth_multiple']
+    cfg['width_multiple'] = scale_configs[args.scale]['width_multiple']
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as tmp:
+        yaml.dump(cfg, tmp)
+        tmp_path = tmp.name
+
+    model = YOLO(tmp_path, task='detect')
+
+    # Clean up temp file after model is loaded
+    os.unlink(tmp_path)
 
 # Train
 results = model.train(
     data='datasets/VisDrone-DET/data.yaml',
     epochs=100,
     imgsz=640,
-    batch=8,                    # Adjust based on GPU memory
+    batch=64,                    # Adjust based on GPU memory
     device=0,                    # GPU device
     optimizer='Adam',
     lr0=0.001,
@@ -194,8 +231,8 @@ results = model.train(
     patience=20,                 # Early stopping
     save=True,
     save_period=25,             # Save checkpoint every 25 epochs
-    project='runs/train',
-    name='hierlight-yolo8-n',
+    project='.',
+    name=f'hierlight-yolo8-{args.scale}' if not args.resume else None,
     exist_ok=True,
     pretrained=True,
     verbose=True,
@@ -204,6 +241,7 @@ results = model.train(
     amp=True,                   # Automatic Mixed Precision
     workers=8,
     close_mosaic=10,            # Disable mosaic augmentation in last 10 epochs
+    resume=bool(args.resume),   # Enable resume if checkpoint provided
 )
 
 # Evaluate on validation set
