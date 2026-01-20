@@ -5,6 +5,8 @@ torch
 torchvision
 torchaudio
 matplotlib
+pandas
+pyyaml
 tqdm
 jupyter
 ipython
