@@ -276,27 +276,46 @@ def filter_coco_annotations_json(
 
 
 if __name__ == "__main__":
-    # Example usage for ultralytics COCO structure
-    # Only val annotations exist
-    
+    # Example usage for common COCO structures
+    # Prefers 2017-style split names if present
+
     coco_root = Path('datasets/coco')
-    
-    # Filter each split
+
+    # Determine which split naming exists
+    standard_splits = ['train', 'val', 'test']
+    coco2017_splits = ['train2017', 'val2017', 'test2017']
+
+    def existing_splits(candidates):
+        return [s for s in candidates if (coco_root / 'images' / s).exists()]
+
+    splits = existing_splits(coco2017_splits) or existing_splits(standard_splits)
+
+    if not splits:
+        raise FileNotFoundError("No image splits found under datasets/coco/images. Expected train/val/test or train2017/val2017/test2017.")
+
+    def find_index_file(split_name):
+        # Handle common variations for test split file naming
+        candidates = [
+            f"{split_name}.txt",
+            f"{split_name.replace('test2017', 'test-dev2017')}.txt",
+            f"{split_name.replace('test', 'test-dev')}.txt",
+        ]
+        for fname in candidates:
+            idx_path = coco_root / fname
+            if idx_path.exists():
+                return idx_path
+        return None
+
     results = {}
-    
-    for split in ['train', 'val', 'test']:
-        # Check if annotations JSON exists for this split
-        annotations_json = coco_root / 'annotations' / f'instances_{split}.json'
-        if split == 'val' and annotations_json.exists():
-            # Val split has annotations, filter them
-            annotations_path = annotations_json
-        else:
-            annotations_path = None
-        
+
+    for split in splits:
+        annotations_json = coco_root / 'annotations' / f"instances_{split}.json"
+        annotations_path = annotations_json if annotations_json.exists() else None
+
         result = filter_coco_split(
             images_dir=coco_root / 'images' / split,
             labels_dir=coco_root / 'labels' / split,
-            index_file=coco_root / f'{split}.txt' if (coco_root / f'{split}.txt').exists() else None,
+            index_file=find_index_file(split),
             backup_dir=coco_root / 'backup' / split,
             annotations_json=annotations_path,
             person_class_id=0,
@@ -304,7 +323,7 @@ if __name__ == "__main__":
             verbose=True
         )
         results[split] = result
-    
+
     # Final summary
     print(f"\n{'='*70}")
     print("OVERALL SUMMARY")

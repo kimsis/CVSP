@@ -218,10 +218,10 @@ else:
 
 # Train
 results = model.train(
-    data='datasets/VisDrone-DET/data.yaml',
+    data='datasets/coco/data.yaml',
     epochs=100,
     imgsz=640,
-    batch=64,                    # Adjust based on GPU memory
+    batch=12,                    # Adjust based on GPU memory
     device=0,                    # GPU device
     optimizer='Adam',
     lr0=0.001,
@@ -230,7 +230,7 @@ results = model.train(
     warmup_epochs=3,
     patience=20,                 # Early stopping
     save=True,
-    save_period=25,             # Save checkpoint every 25 epochs
+    save_period=10,             # Save checkpoint every 25 epochs
     project='.',
     name=f'hierlight-yolo8-{args.scale}' if not args.resume else None,
     exist_ok=True,
