@@ -218,7 +218,7 @@ else:
 
 # Train
 results = model.train(
-    data='datasets/coco/data.yaml',
+    data='coco.yaml',
     epochs=100,
     imgsz=640,
     batch=12,                    # Adjust based on GPU memory
