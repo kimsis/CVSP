@@ -180,6 +180,8 @@ if torch.cuda.is_available():
 parser = argparse.ArgumentParser(description='Train HierLight-YOLO')
 parser.add_argument('--scale', type=str, default='n', choices=['n', 's', 'm'], help='Model scale (n/s/m)')
 parser.add_argument('--resume', type=str, default=None, help='Path to checkpoint .pt to resume from')
+parser.add_argument('--weights', type=str, default=None, help='Path to pretrained .pt to fine-tune from (different dataset)')
+parser.add_argument('--data', type=str, default='coco.yaml', help='Dataset YAML path')
 args = parser.parse_args()
 
 # Scale configurations
@@ -193,10 +195,17 @@ scale_configs = {
 import yaml
 import tempfile
 import os
+if args.resume and args.weights:
+    print("Error: --resume and --weights cannot be used together. Use --resume to continue the same run or --weights to fine-tune on a new dataset.")
+    sys.exit(1)
+
 if args.resume:
-    # Load from checkpoint and resume
+    # Load from checkpoint and resume same training run (same dataset)
     model = YOLO(args.resume)
     # When resuming, most settings are taken from the checkpoint; pass resume=True below
+elif args.weights:
+    # Load pretrained checkpoint for fine-tuning on a different dataset
+    model = YOLO(args.weights)
 else:
     # Build model from custom YAML with selected scale
     model_path = 'models/hierlight-yolo8.yaml'
@@ -218,10 +227,10 @@ else:
 
 # Train
 results = model.train(
-    data='coco.yaml',
+    data=args.data,
     epochs=100,
     imgsz=640,
-    batch=12,                    # Adjust based on GPU memory
+    batch=20,                    # Adjust based on GPU memory
     device=0,                    # GPU device
     optimizer='Adam',
     lr0=0.001,
@@ -230,7 +239,7 @@ results = model.train(
     warmup_epochs=3,
     patience=20,                 # Early stopping
     save=True,
-    save_period=10,             # Save checkpoint every 25 epochs
+    save_period=10,             # Save checkpoint every 10 epochs
     project='.',
     name=f'hierlight-yolo8-{args.scale}' if not args.resume else None,
     exist_ok=True,
@@ -241,7 +250,7 @@ results = model.train(
     amp=True,                   # Automatic Mixed Precision
     workers=8,
     close_mosaic=10,            # Disable mosaic augmentation in last 10 epochs
-    resume=bool(args.resume),   # Enable resume if checkpoint provided
+    resume=bool(args.resume),   # Only resume when explicitly requested
 )
 
 # Evaluate on validation set
