@@ -1,5 +1,6 @@
 import sys
 import argparse
+from typing import Optional
 sys.path.insert(0, "./models")
 
 # Import your custom layers
@@ -182,6 +183,12 @@ parser.add_argument('--scale', type=str, default='n', choices=['n', 's', 'm'], h
 parser.add_argument('--resume', type=str, default=None, help='Path to checkpoint .pt to resume from')
 parser.add_argument('--weights', type=str, default=None, help='Path to pretrained .pt to fine-tune from (different dataset)')
 parser.add_argument('--data', type=str, default='coco.yaml', help='Dataset YAML path')
+parser.add_argument('--freeze', type=int, default=None, help='Freeze first N layers during training')
+parser.add_argument('--epochs', type=int, default=100, help='Total training epochs')
+parser.add_argument('--freeze_epochs', type=int, default=10, help='Epochs to train with frozen layers before unfreezing')
+parser.add_argument('--lr0', type=float, default=0.001, help='Base learning rate')
+parser.add_argument('--freeze_lr_factor', type=float, default=0.05, help='LR reduction factor per frozen layer (e.g., 0.05 → -5% per layer)')
+parser.add_argument('--freeze_lr_min_scale', type=float, default=0.10, help='Minimum LR scaling when freezing (floor multiplier of base lr)')
 args = parser.parse_args()
 
 # Scale configurations
@@ -225,33 +232,78 @@ else:
     # Clean up temp file after model is loaded
     os.unlink(tmp_path)
 
-# Train
-results = model.train(
-    data=args.data,
-    epochs=100,
-    imgsz=640,
-    batch=20,                    # Adjust based on GPU memory
-    device=0,                    # GPU device
-    optimizer='Adam',
-    lr0=0.001,
-    momentum=0.9,
-    weight_decay=0.0005,
-    warmup_epochs=3,
-    patience=20,                 # Early stopping
-    save=True,
-    save_period=10,             # Save checkpoint every 10 epochs
-    project='.',
-    name=f'hierlight-yolo8-{args.scale}' if not args.resume else None,
-    exist_ok=True,
-    pretrained=True,
-    verbose=True,
-    seed=0,
-    deterministic=True,
-    amp=True,                   # Automatic Mixed Precision
-    workers=8,
-    close_mosaic=10,            # Disable mosaic augmentation in last 10 epochs
-    resume=bool(args.resume),   # Only resume when explicitly requested
-)
+def _scaled_lr(base_lr: float, freeze_layers: int | None, *, factor: float, min_scale: float) -> float:
+    """Scale LR down as a function of frozen layers.
+    Linear heuristic: lr = base_lr * max(min_scale, 1 - factor * freeze)
+    Defaults: factor=0.05, min_scale=0.10 for safer reductions.
+    """
+    if not freeze_layers:
+        return base_lr
+    scale = max(float(min_scale), 1.0 - float(factor) * int(freeze_layers))
+    return base_lr * scale
+
+def build_common_train_kwargs(args, run_name: Optional[str]) -> dict:
+    return {
+        'data': args.data,
+        'imgsz': 640,
+        'batch': 12,
+        'device': 0,
+        'optimizer': 'Adam',
+        'momentum': 0.9,
+        'weight_decay': 0.0005,
+        'warmup_epochs': 3,
+        'patience': 20,
+        'save': True,
+        'save_period': 10,
+        'project': '.',
+        'name': run_name,
+        'exist_ok': True,
+        'pretrained': True,
+        'verbose': True,
+        'seed': 0,
+        'deterministic': True,
+        'amp': True,
+        'workers': 8,
+        'close_mosaic': 10,
+    }
+
+def run_train(model, common: dict, *, epochs: int, lr0: float, freeze: Optional[int], resume: bool):
+    kwargs = dict(common)
+    kwargs.update({'epochs': epochs, 'lr0': lr0, 'resume': resume})
+    if freeze is not None:
+        kwargs['freeze'] = freeze
+    # When resuming, remove 'pretrained' to avoid conflicts with resume mode
+    if resume and 'pretrained' in kwargs:
+        del kwargs['pretrained']
+    return model.train(**kwargs)
+
+# Choose run name (keep same name across phases to allow resume)
+run_name = f'hierlight-yolo8-{args.scale}' if not args.resume else None
+common = build_common_train_kwargs(args, run_name)
+
+# Train (supports progressive unfreeze)
+if args.freeze is not None and args.freeze_epochs > 0 and not args.resume:
+    # Phase 1: train with frozen layers and reduced LR
+    frozen_lr = _scaled_lr(
+        args.lr0,
+        args.freeze,
+        factor=args.freeze_lr_factor,
+        min_scale=args.freeze_lr_min_scale,
+    )
+    print(
+        f"Phase 1: freeze={args.freeze}, epochs={args.freeze_epochs}, "
+        f"lr0={frozen_lr:.6f} (factor={args.freeze_lr_factor}, min={args.freeze_lr_min_scale})"
+    )
+    results = run_train(model, common, epochs=args.freeze_epochs, lr0=frozen_lr, freeze=args.freeze, resume=False)
+
+    # Phase 2: reload best checkpoint and continue training unfrozen
+    checkpoint_path = f'{run_name}/weights/best.pt'
+    print(f"Phase 2: loading {checkpoint_path}, unfreeze, train to epochs={args.epochs}, lr0={args.lr0:.6f}")
+    model = YOLO(checkpoint_path)
+    results = run_train(model, common, epochs=args.epochs, lr0=args.lr0, freeze=0, resume=False)
+else:
+    # Single-phase training
+    results = run_train(model, common, epochs=args.epochs, lr0=args.lr0, freeze=args.freeze, resume=bool(args.resume))
 
 # Evaluate on validation set
 metrics = model.val()
