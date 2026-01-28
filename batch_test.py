@@ -172,14 +172,14 @@ def main(args: argparse.Namespace):
     print("\n" + "="*80)
     print("SUMMARY")
     print("="*80)
-    print(f"{'Model':<30} {'Status':<12} {'Frames':<10} {'Detections':<12} {'Avg FPS':<10}")
+    print(f"{'Model':<30} {'Status':<12} {'Frames':<10} {'Detections':<12} {'Inf Time(s)':<10}")
     print("-"*80)
     for result in all_results:
         status = result.get("status", "UNKNOWN")
         frames = result.get("total_frames", 0)
         detections = result.get("total_detections", 0)
-        fps = result.get("avg_fps", 0.0)
-        print(f"{result['model_name']:<30} {status:<12} {frames:<10} {detections:<12} {fps:<10.2f}")
+        inference_time = result.get("total_inference_time", 0.0)
+        print(f"{result['model_name']:<30} {status:<12} {frames:<10} {detections:<12} {inference_time:<10.2f}")
 
 
 if __name__ == "__main__":
