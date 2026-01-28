@@ -1,0 +1,106 @@
+{
+  "timestamp": "2026-01-28T07:33:04.859622",
+  "total_models_tested": 4,
+  "total_time_seconds": 570.7006602287292,
+  "video_sources": [
+    "DJI_20250910105849_0043_D.MP4"
+  ],
+  "results": [
+    {
+      "model_name": "hierlight-yolo8-m-unfrozen",
+      "status": "SUCCESS",
+      "videos": [
+        {
+          "video_name": "DJI_20250910105849_0043_D.MP4",
+          "video_source": "DJI_20250910105849_0043_D.MP4",
+          "resolution": "3840x2160",
+          "fps": 59,
+          "total_frames": 2509,
+          "total_detections": 14843,
+          "inference_time": 0.3552699089050293,
+          "total_time": 145.12089490890503,
+          "avg_fps": 17.289033406078044,
+          "avg_detections_per_frame": 5.915902750099641
+        }
+      ],
+      "total_frames": 2509,
+      "total_detections": 14843,
+      "total_inference_time": 0.3552699089050293,
+      "avg_fps": 7062.236167799692,
+      "avg_detections_per_frame": 5.915902750099641,
+      "model_path": "runs/train/hierlight-yolo8-m-unfrozen/weights/best.pt"
+    },
+    {
+      "model_name": "yolov8m-unfrozen",
+      "status": "SUCCESS",
+      "videos": [
+        {
+          "video_name": "DJI_20250910105849_0043_D.MP4",
+          "video_source": "DJI_20250910105849_0043_D.MP4",
+          "resolution": "3840x2160",
+          "fps": 59,
+          "total_frames": 2509,
+          "total_detections": 7908,
+          "inference_time": 0.2148747444152832,
+          "total_time": 143.25538778305054,
+          "avg_fps": 17.51417547938714,
+          "avg_detections_per_frame": 3.151853328019131
+        }
+      ],
+      "total_frames": 2509,
+      "total_detections": 7908,
+      "total_inference_time": 0.2148747444152832,
+      "avg_fps": 11676.570026074896,
+      "avg_detections_per_frame": 3.151853328019131,
+      "model_path": "runs/train/yolov8m-unfrozen/weights/best.pt"
+    },
+    {
+      "model_name": "yolo11s-finetune",
+      "status": "SUCCESS",
+      "videos": [
+        {
+          "video_name": "DJI_20250910105849_0043_D.MP4",
+          "video_source": "DJI_20250910105849_0043_D.MP4",
+          "resolution": "3840x2160",
+          "fps": 59,
+          "total_frames": 2509,
+          "total_detections": 10937,
+          "inference_time": 0.20432400703430176,
+          "total_time": 138.99541759490967,
+          "avg_fps": 18.050954797029835,
+          "avg_detections_per_frame": 4.3591072140294935
+        }
+      ],
+      "total_frames": 2509,
+      "total_detections": 10937,
+      "total_inference_time": 0.20432400703430176,
+      "avg_fps": 12279.516423044655,
+      "avg_detections_per_frame": 4.3591072140294935,
+      "model_path": "runs/train/yolo11s-finetune/weights/best.pt"
+    },
+    {
+      "model_name": "yolo11m-finetune",
+      "status": "SUCCESS",
+      "videos": [
+        {
+          "video_name": "DJI_20250910105849_0043_D.MP4",
+          "video_source": "DJI_20250910105849_0043_D.MP4",
+          "resolution": "3840x2160",
+          "fps": 59,
+          "total_frames": 2509,
+          "total_detections": 14886,
+          "inference_time": 0.2268533706665039,
+          "total_time": 143.1739158630371,
+          "avg_fps": 17.52414177454053,
+          "avg_detections_per_frame": 5.933041052212037
+        }
+      ],
+      "total_frames": 2509,
+      "total_detections": 14886,
+      "total_inference_time": 0.2268533706665039,
+      "avg_fps": 11060.007583878793,
+      "avg_detections_per_frame": 5.933041052212037,
+      "model_path": "runs/train/yolo11m-finetune/weights/best.pt"
+    }
+  ]
+}

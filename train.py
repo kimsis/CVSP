@@ -1,6 +1,9 @@
 import sys
 import argparse
 from typing import Optional
+from pathlib import Path
+from types import SimpleNamespace
+import yaml
 sys.path.insert(0, "./models")
 
 # Import your custom layers
@@ -20,6 +23,7 @@ tasks.LDown = LDown
 
 # Patch parse_model to include custom modules in base_modules and repeat_modules
 _original_parse_model = tasks.parse_model
+_patch_applied = False
 
 def patched_parse_model(d, ch, verbose=True):
     """Wrapper to inject custom modules into base_modules and repeat_modules"""
@@ -43,7 +47,7 @@ def patched_parse_model(d, ch, verbose=True):
     nc, act, scales = (d.get(x) for x in ("nc", "activation", "scales"))
     depth, width, kpt_shape = (d.get(x, 1.0) for x in ("depth_multiple", "width_multiple", "kpt_shape"))
     scale = d.get("scale")
-    if scales:
+    if scales and isinstance(scales, dict):
         if not scale:
             scale = next(iter(scales.keys()))
             LOGGER.warning(f"no model scale passed. Assuming scale='{scale}'.")
@@ -166,9 +170,6 @@ def patched_parse_model(d, ch, verbose=True):
     
     return torch.nn.Sequential(*layers), sorted(save)
 
-# Monkey-patch parse_model
-tasks.parse_model = patched_parse_model
-
 from ultralytics import YOLO
 import torch
 
@@ -177,19 +178,22 @@ print(f"CUDA available: {torch.cuda.is_available()}")
 if torch.cuda.is_available():
     print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-# Parse command-line arguments
+# Parse CLI argument
 parser = argparse.ArgumentParser(description='Train HierLight-YOLO')
-parser.add_argument('--scale', type=str, default='n', choices=['n', 's', 'm'], help='Model scale (n/s/m)')
-parser.add_argument('--resume', type=str, default=None, help='Path to checkpoint .pt to resume from')
-parser.add_argument('--weights', type=str, default=None, help='Path to pretrained .pt to fine-tune from (different dataset)')
-parser.add_argument('--data', type=str, default='coco.yaml', help='Dataset YAML path')
-parser.add_argument('--freeze', type=int, default=None, help='Freeze first N layers during training')
-parser.add_argument('--epochs', type=int, default=100, help='Total training epochs')
-parser.add_argument('--freeze_epochs', type=int, default=10, help='Epochs to train with frozen layers before unfreezing')
-parser.add_argument('--lr0', type=float, default=0.001, help='Base learning rate')
-parser.add_argument('--freeze_lr_factor', type=float, default=0.05, help='LR reduction factor per frozen layer (e.g., 0.05 → -5% per layer)')
-parser.add_argument('--freeze_lr_min_scale', type=float, default=0.10, help='Minimum LR scaling when freezing (floor multiplier of base lr)')
-args = parser.parse_args()
+parser.add_argument('--resume', type=str, default=None, help='Path to checkpoint .pt to resume training from the same run')
+parser.add_argument('--pretrain-ckpt', type=str, default=None, help='Path to a completed pretrain checkpoint to use as input for stages 2 and 3')
+cli_args = parser.parse_args()
+
+# Load training configuration from YAML
+CONFIG_PATH = 'train_config.yaml'
+with open(CONFIG_PATH, 'r') as f:
+    _cfg = yaml.safe_load(f) or {}
+
+# Add resume from CLI (always set, defaults to None if not provided)
+_cfg['resume'] = cli_args.resume
+_cfg['pretrain_ckpt'] = cli_args.pretrain_ckpt
+
+args = SimpleNamespace(**_cfg)
 
 # Scale configurations
 scale_configs = {
@@ -199,22 +203,74 @@ scale_configs = {
 }
 
 # Load model with scale by modifying YAML config
-import yaml
 import tempfile
 import os
-if args.resume and args.weights:
-    print("Error: --resume and --weights cannot be used together. Use --resume to continue the same run or --weights to fine-tune on a new dataset.")
+if args.resume and args.pretrain_ckpt:
+    print("Error: --resume and --pretrain-ckpt cannot be used together.")
     sys.exit(1)
 
+# Determine base model name for run directories
 if args.resume:
-    # Load from checkpoint and resume same training run (same dataset)
+    run_dir = Path(args.resume).parent.parent.name
+    if run_dir.endswith('-pretrain'):
+        model_base = run_dir.removesuffix('-pretrain')
+    elif run_dir.endswith('-finetune'):
+        model_base = run_dir.removesuffix('-finetune')
+    else:
+        model_base = run_dir
+elif args.pretrain_ckpt:
+    # Extract base name from pretrain checkpoint path
+    run_dir = Path(args.pretrain_ckpt).parent.parent.name
+    if run_dir.endswith('-pretrain'):
+        model_base = run_dir.removesuffix('-pretrain')
+    else:
+        model_base = run_dir
+elif args.weights:
+    model_base = Path(args.weights).stem  # e.g., "yolov8n" from "yolov8n.pt"
+else:
+    model_base = f'hierlight-yolo8-{args.scale}'
+
+pretrain_run = f'{model_base}-pretrain'
+frozen_run = f'{model_base}-frozen'
+unfrozen_run = f'{model_base}-unfrozen'
+
+# Decide starting stage from checkpoint path (folder suffix)
+guessed_stage = None
+if args.resume:
+    run_dir = Path(args.resume).parent.parent.name
+    if run_dir.endswith('-pretrain'):
+        guessed_stage = 'pretrain'
+    elif run_dir.endswith('-frozen'):
+        guessed_stage = 'frozen'
+    elif run_dir.endswith('-unfrozen'):
+        guessed_stage = 'unfrozen'
+elif args.pretrain_ckpt:
+    # Using a completed pretrain checkpoint → skip to stage 2
+    guessed_stage = 'frozen'
+
+# Use explicit start_stage from config if provided, otherwise use guessed stage
+start_stage = args.start_stage if hasattr(args, 'start_stage') and args.start_stage else (guessed_stage or 'pretrain')
+
+print(f"DEBUG: args.resume={args.resume}")
+print(f"DEBUG: start_stage={start_stage}")
+print(f"DEBUG: guessed_stage={guessed_stage}")
+
+# Apply patch for custom modules if configured
+if args.custom_model:
+    tasks.parse_model = patched_parse_model
+
+if args.resume:
+    # Load from checkpoint and resume same training run
     model = YOLO(args.resume)
-    # When resuming, most settings are taken from the checkpoint; pass resume=True below
+    # When resuming, most settings are taken from the checkpoint; pass resume=True selectively per stage
+elif args.pretrain_ckpt:
+    # Load a completed pretrain checkpoint to use for fine-tuning stages 2 and 3
+    model = YOLO(args.pretrain_ckpt)
 elif args.weights:
     # Load pretrained checkpoint for fine-tuning on a different dataset
     model = YOLO(args.weights)
 else:
-    # Build model from custom YAML with selected scale
+    # Build model from custom YAML with selected scale (scale only applies here)
     model_path = 'models/hierlight-yolo8.yaml'
     with open(model_path, 'r') as f:
         cfg = yaml.safe_load(f)
@@ -242,20 +298,20 @@ def _scaled_lr(base_lr: float, freeze_layers: int | None, *, factor: float, min_
     scale = max(float(min_scale), 1.0 - float(factor) * int(freeze_layers))
     return base_lr * scale
 
-def build_common_train_kwargs(args, run_name: Optional[str]) -> dict:
+def build_common_train_kwargs(args, run_name: Optional[str], data_path: str) -> dict:
     return {
-        'data': args.data,
+        'data': data_path,
         'imgsz': 640,
-        'batch': 12,
+        'batch': args.batch,
         'device': 0,
         'optimizer': 'Adam',
         'momentum': 0.9,
-        'weight_decay': 0.0005,
+        'weight_decay': args.weight_decay,
         'warmup_epochs': 3,
-        'patience': 20,
+        'patience': args.patience,
         'save': True,
-        'save_period': 10,
-        'project': '.',
+        'save_period': args.save_period,
+        'project': str(Path('runs/train').resolve()),
         'name': run_name,
         'exist_ok': True,
         'pretrained': True,
@@ -263,7 +319,7 @@ def build_common_train_kwargs(args, run_name: Optional[str]) -> dict:
         'seed': 0,
         'deterministic': True,
         'amp': True,
-        'workers': 8,
+        'workers': args.workers,
         'close_mosaic': 10,
     }
 
@@ -277,13 +333,89 @@ def run_train(model, common: dict, *, epochs: int, lr0: float, freeze: Optional[
         del kwargs['pretrained']
     return model.train(**kwargs)
 
-# Choose run name (keep same name across phases to allow resume)
-run_name = f'hierlight-yolo8-{args.scale}' if not args.resume else None
-common = build_common_train_kwargs(args, run_name)
+# Common kwargs for each stage
+pretrain_common = build_common_train_kwargs(args, pretrain_run, args.pretrain_data)
+frozen_common = build_common_train_kwargs(args, frozen_run, args.finetune_data)
+unfrozen_common = build_common_train_kwargs(args, unfrozen_run, args.finetune_data)
 
-# Train (supports progressive unfreeze)
-if args.freeze is not None and args.freeze_epochs > 0 and not args.resume:
-    # Phase 1: train with frozen layers and reduced LR
+# Stage execution flags
+do_pretrain = start_stage == 'pretrain'
+do_frozen = start_stage in ['pretrain', 'frozen']
+
+# Stage 1: pretrain on baseline dataset
+stage1_best = str(Path(f'runs/train/{pretrain_run}/weights/best.pt').resolve())
+
+# Determine starting checkpoint based on stage and available weights
+if args.pretrain_ckpt:
+    # Explicit pretrain checkpoint provided via CLI
+    finetune_start_ckpt = str(Path(args.pretrain_ckpt).resolve())
+    do_pretrain = False
+elif args.weights and start_stage in ['frozen', 'unfrozen']:
+    # Starting from frozen/unfrozen with base weights (e.g., yolov8m.pt)
+    finetune_start_ckpt = args.weights
+elif args.resume:
+    # Resuming from a checkpoint
+    finetune_start_ckpt = str(Path(args.resume).resolve())
+elif start_stage == 'unfrozen':
+    # Starting at unfrozen stage, look for frozen checkpoint first
+    frozen_best = str(Path(f'runs/train/{frozen_run}/weights/best.pt').resolve())
+    if Path(frozen_best).exists():
+        finetune_start_ckpt = frozen_best
+    elif Path(stage1_best).exists():
+        # Fallback to pretrain checkpoint
+        finetune_start_ckpt = stage1_best
+    else:
+        # No checkpoint found - use the base model (already loaded)
+        finetune_start_ckpt = None
+elif start_stage == 'frozen':
+    # Starting at frozen stage, look for pretrain checkpoint
+    if Path(stage1_best).exists():
+        finetune_start_ckpt = stage1_best
+    else:
+        # No checkpoint found - use the base model (already loaded)
+        finetune_start_ckpt = None
+else:
+    # Default: pretrain stage
+    finetune_start_ckpt = stage1_best
+
+if do_pretrain:
+    resume_pretrain = bool(args.resume)
+    
+    # Check if resuming a completed pretrain run
+    if resume_pretrain:
+        # Try to read the checkpoint to see if training is complete
+        import torch
+        try:
+            ckpt = torch.load(args.resume, map_location='cpu')
+            epoch = ckpt.get('epoch', -1)
+            if epoch >= args.pretrain_epochs - 1:  # 0-indexed, so epoch 99 = 100 epochs
+                print(f"Stage 1 (pretrain): SKIPPED - checkpoint already trained to {epoch+1}/{args.pretrain_epochs} epochs")
+                resume_pretrain = False
+                do_pretrain = False
+                finetune_start_ckpt = args.resume  # Use the pretrain checkpoint for finetuning
+        except Exception as e:
+            print(f"Warning: Could not check checkpoint completion: {e}")
+    
+    if do_pretrain:
+        print(
+            f"Stage 1 (pretrain): data={args.pretrain_data}, epochs={args.pretrain_epochs}, "
+            f"lr0={args.lr0:.6f}, resume={resume_pretrain}"
+        )
+        results = run_train(
+            model,
+            pretrain_common,
+            epochs=args.pretrain_epochs,
+            lr0=args.lr0,
+            freeze=None,
+            resume=resume_pretrain,
+        )
+        finetune_start_ckpt = stage1_best
+elif args.resume and not args.pretrain_ckpt:
+    # Skipping pretrain because resuming from a finetune checkpoint
+    finetune_start_ckpt = str(Path(args.resume).resolve())
+
+# Stage 2: optional frozen finetune
+if do_frozen and args.freeze is not None and args.freeze_epochs > 0:
     frozen_lr = _scaled_lr(
         args.lr0,
         args.freeze,
@@ -291,19 +423,63 @@ if args.freeze is not None and args.freeze_epochs > 0 and not args.resume:
         min_scale=args.freeze_lr_min_scale,
     )
     print(
-        f"Phase 1: freeze={args.freeze}, epochs={args.freeze_epochs}, "
-        f"lr0={frozen_lr:.6f} (factor={args.freeze_lr_factor}, min={args.freeze_lr_min_scale})"
+        f"Stage 2 (frozen finetune): data={args.finetune_data}, freeze={args.freeze}, "
+        f"epochs={args.freeze_epochs}, lr0={frozen_lr:.6f}, resume=False"
     )
-    results = run_train(model, common, epochs=args.freeze_epochs, lr0=frozen_lr, freeze=args.freeze, resume=False)
+    model = YOLO(finetune_start_ckpt)
+    results = run_train(
+        model,
+        frozen_common,
+        epochs=args.freeze_epochs,
+        lr0=frozen_lr,
+        freeze=args.freeze,
+        resume=False,
+    )
+    finetune_start_ckpt = str(Path(f'runs/train/{frozen_run}/weights/best.pt').resolve())
 
-    # Phase 2: reload best checkpoint and continue training unfrozen
-    checkpoint_path = f'{run_name}/weights/best.pt'
-    print(f"Phase 2: loading {checkpoint_path}, unfreeze, train to epochs={args.epochs}, lr0={args.lr0:.6f}")
-    model = YOLO(checkpoint_path)
-    results = run_train(model, common, epochs=args.epochs, lr0=args.lr0, freeze=0, resume=False)
-else:
-    # Single-phase training
-    results = run_train(model, common, epochs=args.epochs, lr0=args.lr0, freeze=args.freeze, resume=bool(args.resume))
+# Stage 3: unfrozen finetune
+# Determine if Stage 3 should resume (only if it's a partially trained finetune checkpoint)
+resume_stage3 = False
+if start_stage == 'unfrozen' and args.resume:
+    # Check if the finetune checkpoint is incomplete
+    try:
+        ckpt = torch.load(args.resume, map_location='cpu')
+        # Check if this is a full checkpoint (with epoch info) or weights-only
+        if isinstance(ckpt, dict) and 'epoch' in ckpt:
+            epoch = ckpt.get('epoch', -1)
+            print(f"Stage 3: Full checkpoint detected at epoch {epoch}/{args.epochs-1} (0-indexed)")
+            if epoch < args.epochs - 1:  # 0-indexed, not yet at final epoch
+                resume_stage3 = True
+                print(f"Stage 3: Resuming from epoch {epoch+1}/{args.epochs}")
+            else:
+                print(f"Stage 3: Checkpoint complete, starting fresh training")
+        else:
+            # Weights-only checkpoint - assume it's incomplete and should be resumed
+            resume_stage3 = True
+            print(f"Stage 3: Weights-only checkpoint detected, resuming training")
+    except Exception as e:
+        print(f"Warning: Could not load checkpoint: {e}")
+        print(f"Proceeding with resume_stage3=True (attempt to resume)")
+        resume_stage3 = True
+
+print(
+    f"Stage 3 (unfrozen finetune): data={args.finetune_data}, epochs={args.epochs}, "
+    f"lr0={args.lr0:.6f}, resume={resume_stage3}"
+)
+
+# Load model for stage 3
+if finetune_start_ckpt:
+    model = YOLO(finetune_start_ckpt)
+# else: model is already loaded from earlier
+
+results = run_train(
+    model,
+    unfrozen_common,
+    epochs=args.epochs,
+    lr0=args.lr0,
+    freeze=0,
+    resume=resume_stage3,
+)
 
 # Evaluate on validation set
 metrics = model.val()

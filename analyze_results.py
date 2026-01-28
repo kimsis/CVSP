@@ -164,7 +164,7 @@ def main(args: argparse.Namespace):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze batch test results")
-    parser.add_argument("results_file", type=str, help="Path to batch test results JSON file")
+    parser.add_argument("--results_file", type=str, help="Path to batch test results JSON file")
     
     args = parser.parse_args()
     main(args)

@@ -13,6 +13,20 @@ Usage:
     python batch_test.py --video_folder test_videos/ --config my_models.yaml --headless
 """
 
+import sys
+sys.path.insert(0, "./models")
+
+from hierlight_modules import IRDCB, LDown
+
+import ultralytics.nn.modules as modules
+import ultralytics.nn.tasks as tasks
+
+modules.IRDCB = IRDCB
+modules.LDown = LDown
+tasks.IRDCB = IRDCB
+tasks.LDown = LDown
+
+# Now import other modules
 import argparse
 import json
 import time
@@ -90,7 +104,8 @@ def test_model_on_videos(model_config: dict, video_sources: list, args: argparse
         output_dir=str(output_dir) if output_dir else None,
         headless=args.headless,
         model_name=model_name,
-        collect_metrics=True
+        collect_metrics=True,
+        target_fps=args.target_fps
     )
     
     # Add model path to metrics
@@ -99,7 +114,7 @@ def test_model_on_videos(model_config: dict, video_sources: list, args: argparse
     print(f"\n✅ Model {model_name} completed:")
     print(f"   Total Frames: {metrics['total_frames']}")
     print(f"   Total Detections: {metrics['total_detections']}")
-    print(f"   Average FPS: {metrics['avg_fps']:.2f}")
+    print(f"   Total Inference Time: {metrics['total_inference_time']:.2f} seconds")
     
     return metrics
 
@@ -174,6 +189,7 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, default="model_configs.yaml", help="Path to model configuration YAML")
     parser.add_argument("--output_dir", type=str, default="batch_test_results", help="Directory to save results")
     parser.add_argument("--save_output", action="store_true", help="Save output videos with detections")
+    parser.add_argument("--target_fps", type=int, default=60, help="Target FPS for video processing (default: 60)")
     parser.add_argument("--headless", action="store_true", help="Run without displaying windows (faster)")
     
     args = parser.parse_args()

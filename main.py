@@ -8,7 +8,7 @@ from static_object_filter import StaticObjectFilter
 from video_utils import draw_label, resize_for_display, get_video_sources
 
 def run_pipeline(model, video_sources, save_output=False, output_dir=None, 
-                 headless=False, model_name=None, collect_metrics=False):
+                 headless=False, model_name=None, collect_metrics=False, target_fps=60):
     """
     Run the detection pipeline on videos with a given model.
     
@@ -20,6 +20,7 @@ def run_pipeline(model, video_sources, save_output=False, output_dir=None,
         headless: Run without display windows
         model_name: Name to display in window title
         collect_metrics: Whether to collect and return performance metrics
+        target_fps: Target FPS for processing (default: 60)
     
     Returns:
         dict: Metrics if collect_metrics=True, otherwise None
@@ -62,8 +63,6 @@ def run_pipeline(model, video_sources, save_output=False, output_dir=None,
         width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         
-        # Calculate delay for proper FPS playback (milliseconds)
-        target_fps = 30
         delay = int(1000 / target_fps) if target_fps > 0 else 1
 
         # Video metrics
@@ -75,11 +74,13 @@ def run_pipeline(model, video_sources, save_output=False, output_dir=None,
             "total_frames": 0,
             "total_detections": 0,
             "inference_time": 0.0,
+            "total_time": 0.0,
             "avg_fps": 0.0
         } if collect_metrics else None
         
         frame_count = 0
         detection_count = 0
+        video_start_time = time.time()  # Track total processing time
 
         out = None
         if save_output:
@@ -90,7 +91,7 @@ def run_pipeline(model, video_sources, save_output=False, output_dir=None,
             else:
                 output_path = f'output_{video_name}' if not is_camera else 'output_camera.mp4'
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(str(output_path), fourcc, fps, (640, 640))
+            out = cv2.VideoWriter(str(output_path), fourcc, fps, (1024, 1024))
 
         if not headless:
             print(f"Starting tracking for {video_name}... Press 'n' to skip to next video, 'q' to quit.")
@@ -101,17 +102,23 @@ def run_pipeline(model, video_sources, save_output=False, output_dir=None,
                 break
             
             frame_count += 1
+            
+            # Keep original frame, process a copy for inference
+            original_frame = frame.copy()
+            original_h, original_w = original_frame.shape[:2]
 
-            frame = cv2.resize(frame, (640, 640))
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.GaussianBlur(frame, (5, 5), 0)
-            frame = cv2.convertScaleAbs(frame, alpha=1.2, beta=20)
+            # Process frame for inference
+            processed_frame = cv2.resize(frame, (1024, 1024))
+            processed_frame = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
+            processed_frame = cv2.GaussianBlur(processed_frame, (5, 5), 0)
+            processed_frame = cv2.convertScaleAbs(processed_frame, alpha=1.2, beta=20)
 
             # Inference with timing
             start_time = time.time()
-            results = model.track(frame, True, True, verbose=False, max_det=300, conf=0.3, iou=0.7)
+            results = model.track(processed_frame, True, True, verbose=False, max_det=300, conf=0.3, iou=0.7)
+            inference_time = time.time() - start_time
             if collect_metrics:
-                video_metrics["inference_time"] += (time.time() - start_time)
+                video_metrics["inference_time"] += inference_time
 
             for result in results:
                 if result.boxes is not None and result.boxes.id is not None:
@@ -122,25 +129,35 @@ def run_pipeline(model, video_sources, save_output=False, output_dir=None,
                     if collect_metrics:
                         detection_count += len(boxes)
 
-                    # Draw bboxes and labels (only if showing or saving)
+                    # Draw bboxes and labels on original frame (only if showing or saving)
                     if not headless or save_output:
+                        # Scale boxes from 1024x1024 back to original resolution
+                        scale_x = original_w / 1024
+                        scale_y = original_h / 1024
+                        
                         active_ids = []
                         for box, track_id, conf in zip(boxes, track_ids, confidence):
-                            is_moving = static_filter.update(track_id, box)
+                            # is_moving = static_filter.update(track_id, box)
 
-                            if is_moving:
+                            # if is_moving:
                                 active_ids.append(track_id)
-                                x1, y1, x2, y2 = map(int, box)
+                                # Scale coordinates back to original frame
+                                x1, y1, x2, y2 = box
+                                x1 = int(x1 * scale_x)
+                                y1 = int(y1 * scale_y)
+                                x2 = int(x2 * scale_x)
+                                y2 = int(y2 * scale_y)
+                                
                                 color = tuple(map(int, colors[track_id % len(colors)]))
-                                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                                cv2.rectangle(original_frame, (x1, y1), (x2, y2), color, 2)
                                 label = f'ID: {track_id} ({conf:.2f})'
-                                draw_label(frame, label, (x1, y1), color)
+                                draw_label(original_frame, label, (x1, y1), color)
 
-                        static_filter.cleanup_old_tracks(active_ids)
+                        # static_filter.cleanup_old_tracks(active_ids)
 
             # Display (unless headless)
             if not headless:
-                display_frame = resize_for_display(frame, max_width=1920, max_height=1080)
+                display_frame = resize_for_display(original_frame, max_width=1920, max_height=1080)
                 cv2.imshow(f'{model_name} - {video_name}', display_frame)
                 
                 key = cv2.waitKey(delay) & 0xFF
@@ -157,7 +174,7 @@ def run_pipeline(model, video_sources, save_output=False, output_dir=None,
                     return
             
             if save_output and out:
-                out.write(frame)
+                out.write(original_frame)
 
         capture.release()
         if out:
@@ -167,9 +184,11 @@ def run_pipeline(model, video_sources, save_output=False, output_dir=None,
         
         # Calculate video metrics
         if collect_metrics:
+            video_elapsed_time = time.time() - video_start_time
             video_metrics["total_frames"] = frame_count
             video_metrics["total_detections"] = detection_count
-            video_metrics["avg_fps"] = frame_count / video_metrics["inference_time"] if video_metrics["inference_time"] > 0 else 0
+            video_metrics["total_time"] = video_elapsed_time
+            video_metrics["avg_fps"] = frame_count / video_elapsed_time if video_elapsed_time > 0 else 0
             video_metrics["avg_detections_per_frame"] = detection_count / frame_count if frame_count > 0 else 0
             
             metrics["videos"].append(video_metrics)

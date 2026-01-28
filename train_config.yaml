@@ -1,0 +1,31 @@
+# Training configuration for Model training pipeline
+
+# Core
+scale: m
+custom_model: true        # Set to true if using custom YAML model, false for standard pretrained models
+weights:                  # Optional pretrained weights to start from (mutually exclusive with resume)
+start_stage: unfrozen     # Override starting stage: 'pretrain', 'frozen', or 'unfrozen'. Leave empty for auto-detection from checkpoint
+
+# Datasets
+pretrain_data: coco.yaml
+finetune_data: visdrone-vid.yaml
+
+# Epochs
+pretrain_epochs: 0        # Pretraining on COCO
+freeze_epochs: 0          # Frozen finetune; skipped if freeze is null or freeze_epochs <= 0
+epochs: 10                # Unfrozen finetune
+
+# Optimizer / LR
+lr0: 0.001
+weight_decay: 0.0005
+freeze_lr_factor: 0.05
+freeze_lr_min_scale: 0.10
+
+# Freezing
+freeze: 0                 # Number of layers to freeze in Stage 2; set null to skip frozen stage
+
+# Training hyperparameters
+batch: 8
+workers: 8
+patience: 20
+save_period: 10
