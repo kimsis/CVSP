@@ -63,7 +63,7 @@ def run_pipeline(model, video_sources, save_output=False, output_dir=None,
         width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         
-        delay = int(1000 / target_fps) if target_fps > 0 else 1
+        target_frame_time = (1000 / fps) if fps > 0 else 1  # ms per frame
 
         # Video metrics
         video_metrics = {
@@ -114,9 +114,9 @@ def run_pipeline(model, video_sources, save_output=False, output_dir=None,
             processed_frame = cv2.convertScaleAbs(processed_frame, alpha=1.2, beta=20)
 
             # Inference with timing
-            start_time = time.time()
+            frame_start_time = time.time()
             results = model.track(processed_frame, True, True, verbose=False, max_det=300, conf=0.3, iou=0.7)
-            inference_time = time.time() - start_time
+            inference_time = time.time() - frame_start_time
             if collect_metrics:
                 video_metrics["inference_time"] += inference_time
 
@@ -159,6 +159,10 @@ def run_pipeline(model, video_sources, save_output=False, output_dir=None,
             if not headless:
                 display_frame = resize_for_display(original_frame, max_width=1920, max_height=1080)
                 cv2.imshow(f'{model_name} - {video_name}', display_frame)
+                
+                # Calculate remaining time to wait for target frame time
+                elapsed_time = (time.time() - frame_start_time) * 1000  # Convert to ms
+                delay = max(1, int(target_frame_time - elapsed_time))
                 
                 key = cv2.waitKey(delay) & 0xFF
                 if key == ord('n'):  # Skip to next video

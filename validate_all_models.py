@@ -211,13 +211,14 @@ def main(args: argparse.Namespace):
     df = pd.DataFrame(all_results)
 
     # Select and rename columns to match the paper's style
-    df_table = df[[col for col in ["model_name", "mAP50", "mAP50_95", "precision", "recall"] if col in df.columns]].copy()
+    df_table = df[[col for col in ["model_name", "mAP50", "mAP50_95", "precision", "recall", "validation_time_seconds"] if col in df.columns]].copy()
     df_table.rename(columns={
         "model_name": "Model",
         "mAP50": "AP$_{0.5}$",
         "mAP50_95": "AP$_{0.5:0.95}$",
         "precision": "Precision",
-        "recall": "Recall"
+        "recall": "Recall",
+        "validation_time_seconds": "Val Time (s)"
     }, inplace=True)
 
     # Format floats for pretty printing

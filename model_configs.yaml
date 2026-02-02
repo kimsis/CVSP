@@ -95,7 +95,7 @@ models:
   # YOLOv8m finetune on VisDrone (unfrozen stage)
   - name: yolov8m-finetune
     path: runs/train/yolov8m-finetune/weights/best.pt
-    enabled: false
+    enabled: true
   
   # YOLO11n base
   - name: yolo11n-base
@@ -125,7 +125,7 @@ models:
   # YOLO11s finetune on VisDrone (unfrozen stage)
   - name: yolo11s-finetune
     path: runs/train/yolo11s-finetune/weights/best.pt
-    enabled: true
+    enabled: false
   
   # YOLO11m base
   - name: yolo11m-base
