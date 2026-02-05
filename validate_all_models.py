@@ -18,7 +18,7 @@ from ultralytics import YOLO
 import sys
 sys.path.insert(0, "./models")
 
-from models.hierlight_modules import IRDCB, LDown
+from hierlight_modules import IRDCB, LDown
 
 import ultralytics.nn.modules as modules
 import ultralytics.nn.tasks as tasks
@@ -29,7 +29,7 @@ tasks.IRDCB = IRDCB
 tasks.LDown = LDown
 
 
-def load_models_from_config(config_path: str = "model_configs.yaml") -> list:
+def load_models_from_config(config_path: str) -> list:
     """
     Load model configurations from YAML file.
     Returns list of enabled models with their paths.
@@ -245,7 +245,7 @@ def main(args: argparse.Namespace):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Validate all trained models on a specific dataset")
-    parser.add_argument("--config", type=str, default="model_configs.yaml", help="YAML config file with model list")
+    parser.add_argument("--config", type=str, default="configs/model_configs.yaml", help="YAML config file with model list")
     parser.add_argument("--data", type=str, default="visdrone-vid.yaml", help="Dataset YAML to validate on")
     parser.add_argument("--output_dir", type=str, default="validation_results", help="Directory to save results")
     

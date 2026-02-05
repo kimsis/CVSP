@@ -2,7 +2,7 @@ task: detect
 mode: train
 model: /home/kimsis/Repositories/CVSP/runs/train/hierlight-yolo8-m-unfrozen/weights/last.pt
 data: visdrone-vid.yaml
-epochs: 10
+epochs: 100
 time: null
 patience: 20
 batch: 8

@@ -185,7 +185,7 @@ parser.add_argument('--pretrain-ckpt', type=str, default=None, help='Path to a c
 cli_args = parser.parse_args()
 
 # Load training configuration from YAML
-CONFIG_PATH = 'train_config.yaml'
+CONFIG_PATH = 'configs/train_config.yaml'
 with open(CONFIG_PATH, 'r') as f:
     _cfg = yaml.safe_load(f) or {}
 
@@ -311,7 +311,7 @@ def build_common_train_kwargs(args, run_name: Optional[str], data_path: str) -> 
         'patience': args.patience,
         'save': True,
         'save_period': args.save_period,
-        'project': str(Path('runs/train').resolve()),
+        'project': str(Path('../runs/train').resolve()),
         'name': run_name,
         'exist_ok': True,
         'pretrained': True,
@@ -398,7 +398,7 @@ if do_pretrain:
     
     if do_pretrain:
         print(
-            f"Stage 1 (pretrain): data={args.pretrain_data}, epochs={args.pretrain_epochs}, "
+            f"Stage 1 (pretrain): data=../{args.pretrain_data}, epochs={args.pretrain_epochs}, "
             f"lr0={args.lr0:.6f}, resume={resume_pretrain}"
         )
         results = run_train(
@@ -423,7 +423,7 @@ if do_frozen and args.freeze is not None and args.freeze_epochs > 0:
         min_scale=args.freeze_lr_min_scale,
     )
     print(
-        f"Stage 2 (frozen finetune): data={args.finetune_data}, freeze={args.freeze}, "
+        f"Stage 2 (frozen finetune): data=../{args.finetune_data}, freeze={args.freeze}, "
         f"epochs={args.freeze_epochs}, lr0={frozen_lr:.6f}, resume=False"
     )
     model = YOLO(finetune_start_ckpt)
@@ -463,7 +463,7 @@ if start_stage == 'unfrozen' and args.resume:
         resume_stage3 = True
 
 print(
-    f"Stage 3 (unfrozen finetune): data={args.finetune_data}, epochs={args.epochs}, "
+    f"Stage 3 (unfrozen finetune): data=../{args.finetune_data}, epochs={args.epochs}, "
     f"lr0={args.lr0:.6f}, resume={resume_stage3}"
 )
 

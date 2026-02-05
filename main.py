@@ -4,8 +4,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 from ultralytics import YOLO
-from static_object_filter import StaticObjectFilter
-from video_utils import draw_label, resize_for_display, get_video_sources
+from scripts.static_object_filter import StaticObjectFilter
+from scripts.video_utils import draw_label, resize_for_display, get_video_sources
 
 def run_pipeline(model, video_sources, save_output=False, output_dir=None, 
                  headless=False, model_name=None, collect_metrics=False, target_fps=60):

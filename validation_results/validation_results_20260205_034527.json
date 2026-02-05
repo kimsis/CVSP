@@ -1,0 +1,80 @@
+{
+  "timestamp": "2026-02-05T03:45:27.744402",
+  "total_models_validated": 6,
+  "total_time_seconds": 101.08662343025208,
+  "dataset": "visdrone-vid.yaml",
+  "results": [
+    {
+      "model_name": "hierlight-yolo8-m-pretrain",
+      "model_path": "runs/train/hierlight-yolo8-m-pretrain/weights/best.pt",
+      "stage": "pretrain",
+      "dataset": "visdrone-vid.yaml",
+      "status": "SUCCESS",
+      "validation_time_seconds": 19.339030265808105,
+      "mAP50": 0.5056284738335262,
+      "mAP50_95": 0.196348546353798,
+      "precision": 0.5627786356446066,
+      "recall": 0.53040284594387
+    },
+    {
+      "model_name": "hierlight-yolo8-m-frozen",
+      "model_path": "runs/train/hierlight-yolo8-m-frozen/weights/best.pt",
+      "stage": "unknown",
+      "dataset": "visdrone-vid.yaml",
+      "status": "SUCCESS",
+      "validation_time_seconds": 18.36592674255371,
+      "mAP50": 0.6234752937990655,
+      "mAP50_95": 0.2672220414071703,
+      "precision": 0.6711488363484639,
+      "recall": 0.5947996598697097
+    },
+    {
+      "model_name": "hierlight-yolo8-m-unfrozen",
+      "model_path": "runs/train/hierlight-yolo8-m-unfrozen/weights/best.pt",
+      "stage": "unknown",
+      "dataset": "visdrone-vid.yaml",
+      "status": "SUCCESS",
+      "validation_time_seconds": 18.04044198989868,
+      "mAP50": 0.6313629982964188,
+      "mAP50_95": 0.26512796302610775,
+      "precision": 0.6863024197897706,
+      "recall": 0.5851251402935126
+    },
+    {
+      "model_name": "yolov8m-unfrozen",
+      "model_path": "runs/train/yolov8m-unfrozen/weights/best.pt",
+      "stage": "unknown",
+      "dataset": "visdrone-vid.yaml",
+      "status": "SUCCESS",
+      "validation_time_seconds": 15.034379720687866,
+      "mAP50": 0.514164528312178,
+      "mAP50_95": 0.20459282254765737,
+      "precision": 0.58894232620567,
+      "recall": 0.5145094609635872
+    },
+    {
+      "model_name": "yolov8m-finetune",
+      "model_path": "runs/train/yolov8m-finetune/weights/best.pt",
+      "stage": "finetune",
+      "dataset": "visdrone-vid.yaml",
+      "status": "SUCCESS",
+      "validation_time_seconds": 14.971941471099854,
+      "mAP50": 0.5553682116309808,
+      "mAP50_95": 0.22073668238454122,
+      "precision": 0.6344640463761921,
+      "recall": 0.5551955795833996
+    },
+    {
+      "model_name": "yolo11m-finetune",
+      "model_path": "runs/train/yolo11m-finetune/weights/best.pt",
+      "stage": "finetune",
+      "dataset": "visdrone-vid.yaml",
+      "status": "SUCCESS",
+      "validation_time_seconds": 15.127060651779175,
+      "mAP50": 0.5727871027760641,
+      "mAP50_95": 0.2327422880348609,
+      "precision": 0.6448517183505931,
+      "recall": 0.5573024328192081
+    }
+  ]
+}

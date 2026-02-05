@@ -14,6 +14,7 @@ Usage:
 """
 
 import sys
+from pathlib import Path
 sys.path.insert(0, "./models")
 
 from hierlight_modules import IRDCB, LDown
@@ -34,11 +35,11 @@ from pathlib import Path
 from datetime import datetime
 import yaml
 from ultralytics import YOLO
-from video_utils import get_video_sources
+from scripts.video_utils import get_video_sources
 from main import run_pipeline
 
 
-def load_model_configs(config_file: str = "model_configs.yaml") -> list:
+def load_model_configs(config_file: str) -> list:
     """
     Load model configurations from YAML file.
     Falls back to hardcoded configs if file doesn't exist.
@@ -186,7 +187,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Batch test multiple models on video dataset")
     parser.add_argument("--video_path", type=str, default=None, help="Path to single video file")
     parser.add_argument("--video_folder", type=str, default=None, help="Folder containing video files")
-    parser.add_argument("--config", type=str, default="model_configs.yaml", help="Path to model configuration YAML")
+    parser.add_argument("--config", type=str, default="configs/model_configs.yaml", help="Path to model configuration YAML")
     parser.add_argument("--output_dir", type=str, default="batch_test_results", help="Directory to save results")
     parser.add_argument("--save_output", action="store_true", help="Save output videos with detections")
     parser.add_argument("--target_fps", type=int, default=60, help="Target FPS for video processing (default: 60)")

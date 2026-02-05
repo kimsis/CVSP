@@ -1,0 +1,7 @@
+Model,Total Frames,Total Detections,Avg FPS,Detections/Frame,Total Time (s)
+hierlight-yolo8-m-pretrain,6635,122174,9773.36,18.41,0.68
+hierlight-yolo8-m-frozen,6635,49504,14098.25,7.46,0.47
+hierlight-yolo8-m-unfrozen,6635,30243,13844.51,4.56,0.48
+yolov8m-unfrozen,6635,112004,14030.23,16.88,0.47
+yolov8m-finetune,6635,170497,13843.04,25.7,0.48
+yolo11m-finetune,6635,119527,13809.79,18.01,0.48
